@@ -304,6 +304,28 @@ namespace jnk0le
 		 */
 		size_t readBuff(T* buff, size_t count);
 
+		template <typename F>
+        size_t readData(size_t count, F f)
+        {
+            index_t available = 0;
+            index_t tmp_tail = tail.load(std::memory_order_relaxed);
+            size_t to_read = count;
+
+            available = head.load(index_acquire_barrier) - tmp_tail;
+
+            if (available < count) // do not read more than we can
+                to_read = available;
+
+            // maybe divide it into 2 separate reads
+            for (size_t i = 0; i < to_read; i++)
+                f(i, data_buff[tmp_tail++ & buffer_mask]);
+
+            std::atomic_signal_fence(std::memory_order_release);
+            tail.store(tmp_tail, index_release_barrier);
+
+            return to_read;
+        }
+
 		/*!
 		 * \brief Load multiple elements from internal buffer without blocking
 		 *
@@ -465,7 +487,6 @@ namespace jnk0le
 
 		return read;
 	}
-
 } // namespace
 
 #endif //RINGBUFFER_HPP
